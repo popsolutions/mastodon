@@ -1,0 +1,18 @@
+[Unit]
+Description=Mastodon Streaming
+After=network.target postgresql.service redis-server.service
+Wants=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=mastodon
+Group=mastodon
+WorkingDirectory=/home/mastodon/live
+Environment="NODE_ENV=production"
+Environment="PORT=4000"
+ExecStart=/usr/local/bin/node streaming/index.js
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

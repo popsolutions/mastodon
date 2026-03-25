@@ -1,0 +1,22 @@
+#include <turnkey/ruby>
+#include <turnkey/postgresql>
+#include <turnkey/nodejs>
+#include <turnkey/redis>
+nginx
+certbot
+python3-certbot-nginx
+imagemagick
+libmagickwand-dev
+ffmpeg
+libvips-dev
+libvips-tools
+libpq-dev
+libxml2-dev
+libxslt1-dev
+libprotobuf-dev
+protobuf-compiler
+pkg-config
+libicu-dev
+libidn-dev
+sudo
+jq

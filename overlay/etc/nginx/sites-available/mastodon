@@ -1,0 +1,100 @@
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+upstream mastodon_web {
+    server [::1]:3000 fail_timeout=0;
+}
+
+upstream mastodon_streaming {
+    server [::1]:4000 fail_timeout=0;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    root /home/mastodon/live/public;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+        allow all;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name _;
+
+    include snippets/ssl.conf;
+
+    root /home/mastodon/live/public;
+
+    keepalive_timeout 70;
+    sendfile on;
+    client_max_body_size 99m;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript image/svg+xml;
+
+    location / {
+        try_files $uri @mastodon_web;
+    }
+
+    location ~ ^/(assets|avatars|emoji|headers|packs|shortcuts|sounds)/ {
+        add_header Cache-Control "public, max-age=2419200, must-revalidate";
+        try_files $uri =404;
+    }
+
+    location ~ ^/system/ {
+        add_header Cache-Control "public, max-age=2419200, immutable";
+        try_files $uri =404;
+    }
+
+    location /sw.js {
+        add_header Cache-Control "public, max-age=604800, must-revalidate";
+        try_files $uri =404;
+    }
+
+    location @mastodon_web {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Proxy "";
+        proxy_pass http://mastodon_web;
+        proxy_buffering on;
+        proxy_redirect off;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        tcp_nodelay on;
+    }
+
+    location /api/v1/streaming {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Proxy "";
+        proxy_pass http://mastodon_streaming;
+        proxy_buffering off;
+        proxy_redirect off;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        tcp_nodelay on;
+    }
+
+    error_page 404 500 501 502 503 504 /500.html;
+}

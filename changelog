@@ -1,0 +1,25 @@
+turnkey-mastodon-19.0 (1) turnkey; urgency=low
+
+  * Initial release — Mastodon v4.5.8 federated social network
+
+  * Ruby 3.4.7 via rbenv (common ruby vertical, jemalloc enabled)
+
+  * Node.js 20 LTS via n (common nodejs vertical)
+
+  * PostgreSQL backend (common pgsql vertical)
+
+  * Redis for caching and Sidekiq (common redis vertical)
+
+  * Nginx reverse proxy with WebSocket support for streaming API
+
+  * IPv6-first upstream blocks (::1)
+
+  * Systemd services: mastodon-web, mastodon-sidekiq, mastodon-streaming
+
+  * Firstboot inithook: domain, admin email, admin password
+
+  * mastodon-upgrade helper for in-place version upgrades
+
+  * Built on TurnKey common verticals — no duplicated Ruby/Node setup
+
+ -- Marcos Mendez <m@pop.coop>  Wed, 25 Mar 2026 00:00:00 -0300

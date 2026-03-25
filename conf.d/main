@@ -1,0 +1,112 @@
+#!/bin/bash -ex
+
+MASTODON_VERSION="v4.5.8"
+MASTODON_USER="mastodon"
+MASTODON_HOME="/home/mastodon"
+MASTODON_LIVE="${MASTODON_HOME}/live"
+DB_NAME="mastodon_production"
+DB_USER="mastodon"
+RUBY_NEEDED=3.4.7
+
+# --- 1. Ruby version (rbenv already installed by COMMON_CONF) ---
+export RBENV_ROOT=/usr/local/rbenv
+export PATH="$RBENV_ROOT/bin:$PATH"
+eval "$(rbenv init -)"
+
+CURRENT_RUBY=$(rbenv global)
+if [ "$CURRENT_RUBY" != "$RUBY_NEEDED" ]; then
+    RUBY_CONFIGURE_OPTS="--with-jemalloc" MAKE_OPTS="-j$(nproc)" \
+        rbenv install $RUBY_NEEDED
+    rbenv global $RUBY_NEEDED
+    gem install --no-document bundler
+fi
+
+# --- 2. Yarn via corepack ---
+corepack enable
+corepack prepare yarn@stable --activate
+
+# --- 3. System user ---
+adduser --disabled-password --gecos "Mastodon" --shell /bin/bash ${MASTODON_USER}
+
+# --- 4. PostgreSQL ---
+systemctl start postgresql
+su - postgres -c "createuser ${DB_USER}"
+su - postgres -c "createdb -O ${DB_USER} ${DB_NAME}"
+su - postgres -c "psql -c \"ALTER USER ${DB_USER} CREATEDB;\""
+
+# --- 5. Redis ---
+redis-server --daemonize yes
+
+# --- 6. Clone Mastodon ---
+su -s /bin/bash - ${MASTODON_USER} -c "
+    git clone https://github.com/mastodon/mastodon.git ${MASTODON_LIVE}
+    cd ${MASTODON_LIVE}
+    git checkout ${MASTODON_VERSION}
+"
+
+# --- 7. Ruby deps ---
+su -s /bin/bash - ${MASTODON_USER} -c "
+    cd ${MASTODON_LIVE}
+    bundle config deployment true
+    bundle config without 'development test'
+    bundle install -j\$(nproc)
+"
+
+# --- 8. JS deps ---
+su -s /bin/bash - ${MASTODON_USER} -c "
+    cd ${MASTODON_LIVE}
+    yarn install --immutable
+"
+
+# --- 9. Assets ---
+su -s /bin/bash - ${MASTODON_USER} -c "
+    cd ${MASTODON_LIVE}
+    RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile
+"
+
+# --- 10. Environment file (placeholders replaced at firstboot) ---
+cat > ${MASTODON_LIVE}/.env.production << ENVEOF
+LOCAL_DOMAIN=localhost
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+DB_HOST=/var/run/postgresql
+DB_NAME=${DB_NAME}
+DB_USER=${DB_USER}
+ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY=PLACEHOLDER_DET_KEY
+ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT=PLACEHOLDER_SALT_KEY
+ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY=PLACEHOLDER_PRI_KEY
+SECRET_KEY_BASE=PLACEHOLDER_SECRET_KEY
+OTP_SECRET=PLACEHOLDER_OTP_SECRET
+ENVEOF
+chown ${MASTODON_USER}:${MASTODON_USER} ${MASTODON_LIVE}/.env.production
+
+# --- 11. Database schema + seed ---
+su -s /bin/bash - ${MASTODON_USER} -c "
+    cd ${MASTODON_LIVE}
+    RAILS_ENV=production SAFETY_ASSURED=1 DISABLE_DATABASE_ENVIRONMENT_CHECK=1 \
+        bundle exec rails db:schema:load
+"
+
+su -s /bin/bash - ${MASTODON_USER} -c "
+    cd ${MASTODON_LIVE}
+    RAILS_ENV=production bundle exec rails db:seed
+"
+
+# --- 12. Systemd ---
+systemctl enable mastodon-web
+systemctl enable mastodon-sidekiq
+systemctl enable mastodon-streaming
+
+# --- 13. Inithooks ---
+chmod +x /usr/lib/inithooks/bin/mastodon.py
+ln -sf /usr/lib/inithooks/bin/mastodon.py \
+       /usr/lib/inithooks/firstboot.d/40mastodon
+
+# --- 14. Nginx ---
+rm -f /etc/nginx/sites-enabled/default
+rm -f /etc/nginx/sites-enabled/tkl-default
+ln -sf /etc/nginx/sites-available/mastodon /etc/nginx/sites-enabled/mastodon
+
+# --- Cleanup ---
+redis-cli shutdown 2>/dev/null || true
+systemctl stop postgresql
