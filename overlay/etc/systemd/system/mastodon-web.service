@@ -10,7 +10,7 @@ Group=mastodon
 WorkingDirectory=/home/mastodon/live
 Environment="RAILS_ENV=production"
 Environment="PORT=3000"
-ExecStart=/home/mastodon/.rbenv/shims/bundle exec puma -C config/puma.rb
+ExecStart=/usr/local/rbenv/shims/bundle exec puma -C config/puma.rb
 Restart=on-failure
 RestartSec=10
 

@@ -44,7 +44,11 @@ su -s /bin/bash - ${MASTODON_USER} -c "
     git checkout ${MASTODON_VERSION}
 "
 
-# --- 7. Ruby deps ---
+# --- 7. Permissions for nginx to read public assets ---
+chmod 755 ${MASTODON_HOME}
+chmod 755 ${MASTODON_LIVE}
+
+# --- 8. Ruby deps ---
 su -s /bin/bash - ${MASTODON_USER} -c "
     cd ${MASTODON_LIVE}
     bundle config deployment true
@@ -52,21 +56,21 @@ su -s /bin/bash - ${MASTODON_USER} -c "
     bundle install -j\$(nproc)
 "
 
-# --- 8. JS deps ---
+# --- 9. JS deps ---
 su -s /bin/bash - ${MASTODON_USER} -c "
     cd ${MASTODON_LIVE}
     yarn install --immutable
 "
 
-# --- 9. Assets ---
+# --- 10. Assets ---
 su -s /bin/bash - ${MASTODON_USER} -c "
     cd ${MASTODON_LIVE}
     RAILS_ENV=production SECRET_KEY_BASE_DUMMY=1 bundle exec rails assets:precompile
 "
 
-# --- 10. Environment file (placeholders replaced at firstboot) ---
+# --- 11. Environment file (placeholders replaced at firstboot) ---
 cat > ${MASTODON_LIVE}/.env.production << ENVEOF
-LOCAL_DOMAIN=localhost
+LOCAL_DOMAIN=PLACEHOLDER_DOMAIN
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 DB_HOST=/var/run/postgresql
@@ -80,7 +84,7 @@ OTP_SECRET=PLACEHOLDER_OTP_SECRET
 ENVEOF
 chown ${MASTODON_USER}:${MASTODON_USER} ${MASTODON_LIVE}/.env.production
 
-# --- 11. Database schema + seed ---
+# --- 12. Database schema + seed ---
 su -s /bin/bash - ${MASTODON_USER} -c "
     cd ${MASTODON_LIVE}
     RAILS_ENV=production SAFETY_ASSURED=1 DISABLE_DATABASE_ENVIRONMENT_CHECK=1 \
@@ -92,17 +96,17 @@ su -s /bin/bash - ${MASTODON_USER} -c "
     RAILS_ENV=production bundle exec rails db:seed
 "
 
-# --- 12. Systemd ---
+# --- 13. Systemd ---
 systemctl enable mastodon-web
 systemctl enable mastodon-sidekiq
 systemctl enable mastodon-streaming
 
-# --- 13. Inithooks ---
+# --- 14. Inithooks ---
 chmod +x /usr/lib/inithooks/bin/mastodon.py
 ln -sf /usr/lib/inithooks/bin/mastodon.py \
        /usr/lib/inithooks/firstboot.d/40mastodon
 
-# --- 14. Nginx ---
+# --- 15. Nginx ---
 rm -f /etc/nginx/sites-enabled/default
 rm -f /etc/nginx/sites-enabled/tkl-default
 ln -sf /etc/nginx/sites-available/mastodon /etc/nginx/sites-enabled/mastodon

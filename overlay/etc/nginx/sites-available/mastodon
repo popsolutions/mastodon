@@ -4,11 +4,11 @@ map $http_upgrade $connection_upgrade {
 }
 
 upstream mastodon_web {
-    server [::1]:3000 fail_timeout=0;
+    server 127.0.0.1:3000 fail_timeout=0;
 }
 
 upstream mastodon_streaming {
-    server [::1]:4000 fail_timeout=0;
+    server 127.0.0.1:4000 fail_timeout=0;
 }
 
 server {
@@ -33,7 +33,11 @@ server {
     listen [::]:443 ssl;
     server_name _;
 
-    include snippets/ssl.conf;
+    ssl_certificate     /etc/ssl/private/cert.pem;
+    ssl_certificate_key /etc/ssl/private/cert.key;
+    http2 on;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
 
     root /home/mastodon/live/public;
 
