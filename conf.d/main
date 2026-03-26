@@ -23,7 +23,7 @@ fi
 
 # --- 2. Yarn via corepack ---
 corepack enable
-corepack prepare yarn@stable --activate
+COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack prepare yarn@stable --activate
 
 # --- 3. System user ---
 adduser --disabled-password --gecos "Mastodon" --shell /bin/bash ${MASTODON_USER}
