@@ -1,4 +1,3 @@
 Mastodon Web          https://$ipaddr/
-IPv6:                 $ip6addr
 Webmin                https://$ipaddr:12321/
 Adminer               https://$ipaddr:12322/
